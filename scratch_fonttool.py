@@ -3,10 +3,10 @@ import math
 from fontTools import ttLib
 
 from Typr.parser import parse_cmap, parse_glyf
-from Typr.reader import read_short
 from Typr.svg import simple_Glyphfunction
 
 tt = ttLib.TTFont("LiberationSans-Bold.ttf")
+print(tt)
 
 print(tt['maxp'].__dict__)
 ## 字形的数量
@@ -35,6 +35,7 @@ fmt = table['format']
 end_count = table['endCount']
 
 
+
 def arr_search(arr, k, v):
     l = 0
     r = math.floor(len(arr) / k)
@@ -47,30 +48,33 @@ def arr_search(arr, k, v):
     return l * k
 
 
-sind = -1
-code = list('P'.encode('utf-8'))[0]
-sind = arr_search(end_count, 1, code)
-print(sind)
-print(table['idDelta'][sind])
-gli = code + table['idDelta'][sind]
-gid = gli & 0xFFFF
+print(tt['kern'].__dict__['kernTables'][0].__dict__['kernTable'])
 
-padj = [0, 0, 0, 0]
-i = 0
+# def parse_text(text):
+text = 'P'
+for i, code in enumerate(text):
+    code = list(code.encode('utf-8'))[0]
+    sind = arr_search(end_count, 1, code)
+    print(sind)
+    print(table['idDelta'][sind])
+    gli = code + table['idDelta'][sind]
+    gid = gli & 0xFFFF
 
-# ax=font["hmtx"].aWidth[gid]+padj[2]
-ax = 1366
+    padj = [0, 0, 0, 0]
 
-shape = {"g": gid, "cl": i, "dx": 0, "dy": 0, "ax": ax, "ay": 0}
 
-# print(tt['glyf'].__dict__.keys())
-gl = tt['glyf'].__dict__['glyphOrder'][gid]
+    # print(tt['glyf'].__dict__.keys())
+    gl = tt['glyf'].__dict__['glyphOrder'][gid]
+    # ax = font["hmtx"].aWidth[gid] + padj[2]
+    ax, _ = tt['hmtx'].__dict__['metrics']['P']  # ax = 1366
 
-data = tt['glyf'].__dict__['glyphs'][gl].__dict__['data']
+    shape = {"g": gid, "cl": i, "dx": 0, "dy": 0, "ax": ax, "ay": 0}
 
-data = parse_glyf(data)
-print(data)
+    data = tt['glyf'].__dict__['glyphs'][gl].data
 
-svg_path = simple_Glyphfunction(data)
+    data = parse_glyf(data)
+    print(data)
 
-print(' '.join([str(i) for i in svg_path]))
+    svg_path = simple_Glyphfunction(data)
+
+    print(' '.join([str(i) for i in svg_path]))

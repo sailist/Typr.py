@@ -1,14 +1,12 @@
 from pprint import pprint
 
-from Typr.reader import read_uint, read_ushort, read_ascii, read_ushorts
+from Typr.reader import read_uint, read_ushort, read_ascii
 from Typr.parser import parse_map, parse_list
 
 with open('LiberationSans-Bold.ttf', 'rb') as r:
     buf = r.read()
 
 print(buf[:4])
-
-import struct
 
 tag, _, offset = read_ascii(buf)
 tag = b''.join(tag)  # .decode()

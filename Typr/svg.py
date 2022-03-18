@@ -12,19 +12,19 @@ import math
 
 
 def move_to(lis, x, y):
-    lis.extend(['M', x, y])
+    lis.extend(['M', x, -y])
 
 
 def line_to(lis, x, y):
-    lis.extend(['L', x, y])
+    lis.extend(['L', x, -y])
 
 
 def curve_to(lis, a, b, c, d, e, f):
-    lis.extend(['C', a, b, c, d, e, f])
+    lis.extend(['C', a, -b, c, -d, e, -f])
 
 
 def qcurve_to(lis, a, b, c, d):
-    lis.extend(['Q', a, b, c, d])
+    lis.extend(['Q', a, -b, c, -d])
 
 
 def close_path(lis):

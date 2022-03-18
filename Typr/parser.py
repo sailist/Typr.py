@@ -1,4 +1,4 @@
-from .reader import *
+from reader import *
 
 
 def parse_glyf(data):
@@ -140,214 +140,214 @@ def parse_glyf(data):
                 gl['instr'].append(data[offset])
     return gl
 
-
-def parse0(buf, offset):
-    prop = {}
-    prop['map'] = []
-    offset += 2
-    len_, _, offset = read_ushort(buf, offset)
-    lang, _, offset = read_ushort(buf, offset)
-    for i in range(len_ - 6):
-        prop['map'].append(offset + i)
-    return prop
-
-
-def parse4(buf, offset):
-    prop = {}
-    offset0 = offset
-    offset += 2
-    length, _, offset = read_ushort(buf, offset)
-    language, _, offset = read_ushort(buf, offset)
-    segCountX2, _, offset = read_ushort(buf, offset)
-    segCount = segCountX2 >> 1
-    prop['searchRange'], _, offset = read_ushort(buf, offset)
-    prop['entrySelector'], _, offset = read_ushort(buf, offset)
-    prop['rangeShift'], _, offset = read_ushort(buf, offset)
-    prop['endCount'], _, offset = read_ushorts(buf, offset, segCount)
-    offset += 2
-    prop['startCount'], _, offset = read_ushorts(buf, offset, segCount)
-    prop['idDelta'] = []
-    for i in range(segCount):
-        us, _, offset = read_short(buf, offset)
-        prop['idDelta'].append(us)
-
-    prop['idRangeOffset'], _, offset = read_ushorts(buf, offset, segCount)
-    prop['glyphIdArray'], _, offset = read_ushorts(buf, offset, ((offset0 + length) - offset) >> 1)
-    return prop
-
-
-def parse6(buf, offset):
-    prop = {}
-
-    # offset0 = offset
-    offset += 2
-    # length = read_ushort(buf, offset)
-    # language = read_ushort(buf, offset)
-    prop['firstCode'], _, offset = read_ushort(buf, offset)
-    entryCount, _, offset = read_ushort(buf, offset)
-    prop['glyphIdArray'] = []
-
-    for i in range(entryCount):
-        us, _, offset = read_ushort(buf, offset)
-        prop['glyphIdArray'].append(us)
-
-    return prop
-
-
-def parse12(buf, offset) -> dict:
-    prop = {}
-    offset0 = offset
-    offset += 4
-    length = read_ushort(buf, offset)
-    lang = read_ushort(buf, offset)
-    nGroups = read_ushort(buf, offset) * 3
-
-    prop['groups'] = [0 for _ in range(nGroups)]
-
-    for i in range(0, nGroups, 3):
-        prop['groups'][i], *_ = read_ushort(buf, offset + (i << 2))
-        prop['groups'][i + 1], *_ = read_ushort(buf, offset + (i << 2) + 4)
-        prop['groups'][i + 2], *_ = read_ushort(buf, offset + (i << 2) + 8)
-    return prop
-
-
-def parse_cmap(buf, offset, length, font):
-    buf = buf[offset: offset + length]
-    obj_tables = []
-    obj_ids = {}
-    obj_offset = offset
-    offset = 0
-
-    version, _, offset = read_ushort(buf, offset)
-    num_tables, _, offset = read_ushort(buf, offset)
-    print(num_tables)
-    offs = []
-    for i in range(num_tables):
-        platform_id, _, offset = read_ushort(buf, offset)
-        encoding_id, _, offset = read_ushort(buf, offset)
-        noffset, _, offset = read_uint(buf, offset)
-
-        id = f'p{platform_id}e{encoding_id}'
-
-        try:
-            tind = offs.index(noffset)
-        except ValueError:
-            tind = -1
-
-        if tind == -1:
-            pass
-            tind = len(obj_tables)
-            # subt = {}
-            offs.append(noffset)
-            format, _, _ = read_ushort(buf, noffset)
-            if format == 0:
-                subt = parse0(buf, noffset)
-            elif format == 4:
-                subt = parse4(buf, noffset)
-            elif format == 6:
-                subt = parse6(buf, noffset)
-            elif format == 12:
-                subt = parse12(buf, noffset)
-            else:
-                raise NotImplementedError()
-            subt['format'] = format
-            obj_tables.append(subt)
-
-        assert id not in obj_ids
-        obj_ids[id] = tind
-
-    return {
-        'ids': obj_ids,
-        'tables': obj_tables,
-        'off': obj_offset
-    }
-
-
-def parse_head(buf, offset, length, font):
-    obj = {}
-    tableVersion, _, offset = read_fixed(buf, offset)
-
-    obj["fontRevision"], _, offset = read_fixed(buf, offset)
-    checkSumAdjustment, _, offset = read_uint(buf, offset)
-    magicNumber, _, offset = read_uint(buf, offset)
-    obj["flags"], _, offset = read_ushort(buf, offset)
-    obj["unitsPerEm"], _, offset = read_ushort(buf, offset)
-    obj["created"], _, offset = read_uint64(buf, offset)
-    obj["modified"], _, offset = read_uint64(buf, offset)
-    obj["xMin"], _, offset = read_short(buf, offset)
-    obj["yMin"], _, offset = read_short(buf, offset)
-    obj["xMax"], _, offset = read_short(buf, offset)
-    obj["yMax"], _, offset = read_short(buf, offset)
-    obj["macStyle"], _, offset = read_ushort(buf, offset)
-    obj["lowestRecPPEM"], _, offset = read_ushort(buf, offset)
-    obj["fontDirectionHint"], _, offset = read_short(buf, offset)
-    obj["indexToLocFormat"], _, offset = read_short(buf, offset)
-    obj["glyphDataFormat"], _, offset = read_short(buf, offset)
-    return obj
-
-
-def parse_hhea(data, offset, length, font):
-    obj = {}
-    tableVersion, _, offset = read_fixed(data, offset)
-
-    keys = ["ascender", "descender", "lineGap",
-            "advanceWidthMax", "minLeftSideBearing", "minRightSideBearing", "xMaxExtent",
-            "caretSlopeRise", "caretSlopeRun", "caretOffset",
-            "res0", "res1", "res2", "res3",
-            "metricDataFormat", "numberOfHMetrics"]
-
-    for i, key in enumerate(keys):
-        func = read_ushort if (key == "advanceWidthMax" or key == "numberOfHMetrics") else read_short
-        obj[key], _, offset = func(data, offset)
-    return obj
-
-
-def parse_maxp(data, offset, length, font):
-    obj = {}
-
-    ver, _, offset = read_uint(data, offset)
-
-    obj["numGlyphs"], _, _ = read_ushort(data, offset)
-
-    return obj
-
-
-def parse_hmtx(data, offset, length, font):
-    aWidth = []
-    lsBearing = []
-
-    nG = font["maxp"]["numGlyphs"]
-    nH = font["hhea"]["numberOfHMetrics"]
-
-    aw, lsb, i = 0, 0, 0
-    while i < nH:
-        aw, _, _ = read_ushort(data, offset + (i << 2))
-        lsb, _, _ = read_short(data, offset + (i << 2) + 2)
-        aWidth.append(aw)
-        lsBearing.append(lsb)
-        i += 1
-
-    while i < nG:
-        aWidth.append(aw)
-        lsBearing.append(lsb)
-        i += 1
-
-    return {'aWidth': aWidth, 'lsBearing': lsBearing}
-
-
-def todo():
-    'name'
-
-
-parse_map = {
-    'cmap': parse_cmap,
-    'head': parse_head,
-    'hhea': parse_hhea,
-    'maxp': parse_maxp,
-    'hmtx': parse_hmtx,
-}
-parse_list = ['cmap',
-              'head',
-              'hhea',
-              'maxp',
-              'hmtx', ]
+#
+# def parse0(buf, offset):
+#     prop = {}
+#     prop['map'] = []
+#     offset += 2
+#     len_, _, offset = read_ushort(buf, offset)
+#     lang, _, offset = read_ushort(buf, offset)
+#     for i in range(len_ - 6):
+#         prop['map'].append(offset + i)
+#     return prop
+#
+#
+# def parse4(buf, offset):
+#     prop = {}
+#     offset0 = offset
+#     offset += 2
+#     length, _, offset = read_ushort(buf, offset)
+#     language, _, offset = read_ushort(buf, offset)
+#     segCountX2, _, offset = read_ushort(buf, offset)
+#     segCount = segCountX2 >> 1
+#     prop['searchRange'], _, offset = read_ushort(buf, offset)
+#     prop['entrySelector'], _, offset = read_ushort(buf, offset)
+#     prop['rangeShift'], _, offset = read_ushort(buf, offset)
+#     prop['endCount'], _, offset = read_ushorts(buf, offset, segCount)
+#     offset += 2
+#     prop['startCount'], _, offset = read_ushorts(buf, offset, segCount)
+#     prop['idDelta'] = []
+#     for i in range(segCount):
+#         us, _, offset = read_short(buf, offset)
+#         prop['idDelta'].append(us)
+#
+#     prop['idRangeOffset'], _, offset = read_ushorts(buf, offset, segCount)
+#     prop['glyphIdArray'], _, offset = read_ushorts(buf, offset, ((offset0 + length) - offset) >> 1)
+#     return prop
+#
+#
+# def parse6(buf, offset):
+#     prop = {}
+#
+#     # offset0 = offset
+#     offset += 2
+#     # length = read_ushort(buf, offset)
+#     # language = read_ushort(buf, offset)
+#     prop['firstCode'], _, offset = read_ushort(buf, offset)
+#     entryCount, _, offset = read_ushort(buf, offset)
+#     prop['glyphIdArray'] = []
+#
+#     for i in range(entryCount):
+#         us, _, offset = read_ushort(buf, offset)
+#         prop['glyphIdArray'].append(us)
+#
+#     return prop
+#
+#
+# def parse12(buf, offset) -> dict:
+#     prop = {}
+#     offset0 = offset
+#     offset += 4
+#     length = read_ushort(buf, offset)
+#     lang = read_ushort(buf, offset)
+#     nGroups = read_ushort(buf, offset) * 3
+#
+#     prop['groups'] = [0 for _ in range(nGroups)]
+#
+#     for i in range(0, nGroups, 3):
+#         prop['groups'][i], *_ = read_ushort(buf, offset + (i << 2))
+#         prop['groups'][i + 1], *_ = read_ushort(buf, offset + (i << 2) + 4)
+#         prop['groups'][i + 2], *_ = read_ushort(buf, offset + (i << 2) + 8)
+#     return prop
+#
+#
+# def parse_cmap(buf, offset, length, font):
+#     buf = buf[offset: offset + length]
+#     obj_tables = []
+#     obj_ids = {}
+#     obj_offset = offset
+#     offset = 0
+#
+#     version, _, offset = read_ushort(buf, offset)
+#     num_tables, _, offset = read_ushort(buf, offset)
+#     print(num_tables)
+#     offs = []
+#     for i in range(num_tables):
+#         platform_id, _, offset = read_ushort(buf, offset)
+#         encoding_id, _, offset = read_ushort(buf, offset)
+#         noffset, _, offset = read_uint(buf, offset)
+#
+#         id = f'p{platform_id}e{encoding_id}'
+#
+#         try:
+#             tind = offs.index(noffset)
+#         except ValueError:
+#             tind = -1
+#
+#         if tind == -1:
+#             pass
+#             tind = len(obj_tables)
+#             # subt = {}
+#             offs.append(noffset)
+#             format, _, _ = read_ushort(buf, noffset)
+#             if format == 0:
+#                 subt = parse0(buf, noffset)
+#             elif format == 4:
+#                 subt = parse4(buf, noffset)
+#             elif format == 6:
+#                 subt = parse6(buf, noffset)
+#             elif format == 12:
+#                 subt = parse12(buf, noffset)
+#             else:
+#                 raise NotImplementedError()
+#             subt['format'] = format
+#             obj_tables.append(subt)
+#
+#         assert id not in obj_ids
+#         obj_ids[id] = tind
+#
+#     return {
+#         'ids': obj_ids,
+#         'tables': obj_tables,
+#         'off': obj_offset
+#     }
+#
+#
+# def parse_head(buf, offset, length, font):
+#     obj = {}
+#     tableVersion, _, offset = read_fixed(buf, offset)
+#
+#     obj["fontRevision"], _, offset = read_fixed(buf, offset)
+#     checkSumAdjustment, _, offset = read_uint(buf, offset)
+#     magicNumber, _, offset = read_uint(buf, offset)
+#     obj["flags"], _, offset = read_ushort(buf, offset)
+#     obj["unitsPerEm"], _, offset = read_ushort(buf, offset)
+#     obj["created"], _, offset = read_uint64(buf, offset)
+#     obj["modified"], _, offset = read_uint64(buf, offset)
+#     obj["xMin"], _, offset = read_short(buf, offset)
+#     obj["yMin"], _, offset = read_short(buf, offset)
+#     obj["xMax"], _, offset = read_short(buf, offset)
+#     obj["yMax"], _, offset = read_short(buf, offset)
+#     obj["macStyle"], _, offset = read_ushort(buf, offset)
+#     obj["lowestRecPPEM"], _, offset = read_ushort(buf, offset)
+#     obj["fontDirectionHint"], _, offset = read_short(buf, offset)
+#     obj["indexToLocFormat"], _, offset = read_short(buf, offset)
+#     obj["glyphDataFormat"], _, offset = read_short(buf, offset)
+#     return obj
+#
+#
+# def parse_hhea(data, offset, length, font):
+#     obj = {}
+#     tableVersion, _, offset = read_fixed(data, offset)
+#
+#     keys = ["ascender", "descender", "lineGap",
+#             "advanceWidthMax", "minLeftSideBearing", "minRightSideBearing", "xMaxExtent",
+#             "caretSlopeRise", "caretSlopeRun", "caretOffset",
+#             "res0", "res1", "res2", "res3",
+#             "metricDataFormat", "numberOfHMetrics"]
+#
+#     for i, key in enumerate(keys):
+#         func = read_ushort if (key == "advanceWidthMax" or key == "numberOfHMetrics") else read_short
+#         obj[key], _, offset = func(data, offset)
+#     return obj
+#
+#
+# def parse_maxp(data, offset, length, font):
+#     obj = {}
+#
+#     ver, _, offset = read_uint(data, offset)
+#
+#     obj["numGlyphs"], _, _ = read_ushort(data, offset)
+#
+#     return obj
+#
+#
+# def parse_hmtx(data, offset, length, font):
+#     aWidth = []
+#     lsBearing = []
+#
+#     nG = font["maxp"]["numGlyphs"]
+#     nH = font["hhea"]["numberOfHMetrics"]
+#
+#     aw, lsb, i = 0, 0, 0
+#     while i < nH:
+#         aw, _, _ = read_ushort(data, offset + (i << 2))
+#         lsb, _, _ = read_short(data, offset + (i << 2) + 2)
+#         aWidth.append(aw)
+#         lsBearing.append(lsb)
+#         i += 1
+#
+#     while i < nG:
+#         aWidth.append(aw)
+#         lsBearing.append(lsb)
+#         i += 1
+#
+#     return {'aWidth': aWidth, 'lsBearing': lsBearing}
+#
+#
+# def todo():
+#     'name'
+#
+#
+# parse_map = {
+#     'cmap': parse_cmap,
+#     'head': parse_head,
+#     'hhea': parse_hhea,
+#     'maxp': parse_maxp,
+#     'hmtx': parse_hmtx,
+# }
+# parse_list = ['cmap',
+#               'head',
+#               'hhea',
+#               'maxp',
+#               'hmtx', ]
